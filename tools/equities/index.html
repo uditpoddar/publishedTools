@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Signal Aggregator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d0d;--surface:#161616;--surface2:#1e1e1e;--surface3:#252525;
+  --border:#2a2a2a;--border2:#333;
+  --text:#e8e8e4;--text2:#888;--text3:#555;
+  --green:#4ade80;--green-dim:#1a3a25;
+  --red:#f87171;--red-dim:#3a1a1a;
+  --amber:#fbbf24;--amber-dim:#3a2e10;
+  --blue:#60a5fa;--blue-dim:#1a2a3a;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+}
+html{font-size:16px;background:var(--bg)}
+body{font-family:var(--sans);color:var(--text);min-height:100vh;padding:0 1rem}
+.wrap{max-width:860px;margin:0 auto;padding:2.5rem 0 5rem}
+
+/* Header */
+.hdr{margin-bottom:2rem}
+.hdr-label{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:.14em;text-transform:uppercase;margin-bottom:.5rem}
+.hdr h1{font-size:28px;font-weight:300;letter-spacing:-.02em;color:var(--text)}
+.hdr p{font-size:13px;color:var(--text2);margin-top:.35rem;line-height:1.5}
+
+/* Search row */
+.search-row{display:flex;gap:8px;margin-bottom:.75rem;flex-wrap:wrap}
+.ticker-input{
+  flex:1;min-width:160px;max-width:240px;
+  background:var(--surface);border:1px solid var(--border2);
+  color:var(--text);font-family:var(--mono);font-size:15px;font-weight:500;
+  padding:.6rem 1rem;border-radius:8px;outline:none;
+  text-transform:uppercase;letter-spacing:.06em;
+  transition:border-color .15s
+}
+.ticker-input:focus{border-color:#555}
+.ticker-input::placeholder{color:var(--text3);text-transform:none;letter-spacing:0;font-weight:300}
+.market-select{
+  background:var(--surface);border:1px solid var(--border2);
+  color:var(--text2);font-family:var(--mono);font-size:12px;
+  padding:.6rem .8rem;border-radius:8px;outline:none;cursor:pointer;
+}
+.market-select option{background:var(--surface2)}
+.btn-fetch{
+  background:var(--text);color:var(--bg);
+  font-family:var(--mono);font-size:12px;font-weight:500;
+  border:none;padding:.6rem 1.25rem;border-radius:8px;cursor:pointer;
+  letter-spacing:.06em;transition:opacity .15s;white-space:nowrap
+}
+.btn-fetch:hover{opacity:.85}
+.btn-fetch:disabled{opacity:.4;cursor:not-allowed}
+
+.market-hints{font-family:var(--mono);font-size:10px;color:var(--text3);line-height:1.8}
+.market-hints span{color:var(--text2);margin-right:1rem}
+
+/* Status bar */
+.status-bar{
+  font-family:var(--mono);font-size:11px;color:var(--text3);
+  padding:.5rem 0;margin-bottom:1.5rem;min-height:1.6rem;
+  border-bottom:1px solid var(--border)
+}
+.status-bar.loading{color:var(--amber)}
+.status-bar.error{color:var(--red)}
+.status-bar.ok{color:var(--green)}
+
+/* Price hero */
+.price-hero{
+  display:flex;align-items:baseline;gap:12px;margin-bottom:2rem;
+  flex-wrap:wrap
+}
+.price-hero .sym{font-family:var(--mono);font-size:13px;color:var(--text2);letter-spacing:.1em}
+.price-hero .price{font-size:36px;font-weight:300;letter-spacing:-.03em;color:var(--text)}
+.price-hero .change{font-family:var(--mono);font-size:13px;padding:3px 10px;border-radius:100px}
+.change.up{background:var(--green-dim);color:var(--green)}
+.change.down{background:var(--red-dim);color:var(--red)}
+.price-hero .meta{font-family:var(--mono);font-size:11px;color:var(--text3)}
+
+/* Signal summary bar */
+.signal-bar{
+  display:flex;gap:8px;margin-bottom:2rem;flex-wrap:wrap
+}
+.signal-pill{
+  font-family:var(--mono);font-size:11px;font-weight:500;
+  padding:5px 14px;border-radius:100px;letter-spacing:.04em;
+  display:flex;align-items:center;gap:6px
+}
+.signal-pill.bull{background:var(--green-dim);color:var(--green)}
+.signal-pill.bear{background:var(--red-dim);color:var(--red)}
+.signal-pill.neut{background:var(--surface3);color:var(--text2)}
+.signal-pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* Composite score */
+.score-row{
+  display:flex;align-items:center;gap:16px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:1rem 1.25rem;margin-bottom:2rem
+}
+.score-label{font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;white-space:nowrap}
+.score-bar-wrap{flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.score-num{font-family:var(--mono);font-size:16px;font-weight:500;min-width:40px;text-align:right}
+.score-verdict{font-family:var(--mono);font-size:11px;padding:4px 12px;border-radius:100px}
+
+/* Indicators grid */
+.ind-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:2rem}
+.ind-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:1rem 1.25rem
+}
+.ind-card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+.ind-name{font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em}
+.ind-badge{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:100px}
+.ind-badge.bull{background:var(--green-dim);color:var(--green)}
+.ind-badge.bear{background:var(--red-dim);color:var(--red)}
+.ind-badge.neut{background:var(--surface3);color:var(--text2)}
+.ind-value{font-size:20px;font-weight:300;letter-spacing:-.02em;color:var(--text);margin-bottom:.2rem}
+.ind-sub{font-family:var(--mono);font-size:11px;color:var(--text3)}
+
+/* Chart */
+.chart-section{margin-bottom:2rem}
+.chart-label{font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:.75rem}
+.chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;position:relative;height:220px}
+
+/* Range selector */
+.range-row{display:flex;gap:6px;margin-bottom:1.5rem}
+.range-btn{
+  font-family:var(--mono);font-size:11px;background:transparent;
+  border:1px solid var(--border);color:var(--text3);
+  padding:4px 12px;border-radius:6px;cursor:pointer;transition:all .15s
+}
+.range-btn:hover{border-color:var(--border2);color:var(--text2)}
+.range-btn.active{background:var(--surface2);border-color:var(--border2);color:var(--text)}
+
+/* Empty state */
+.empty{
+  text-align:center;padding:5rem 2rem;
+  font-family:var(--mono);font-size:13px;color:var(--text3)
+}
+.empty .big{font-size:40px;margin-bottom:1rem;opacity:.3}
+
+/* Footer */
+.foot{
+  font-family:var(--mono);font-size:10px;color:var(--text3);
+  border-top:1px solid var(--border);padding-top:1.25rem;
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px
+}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <p class="hdr-label">Signal Aggregator</p>
+    <h1>Technical signals</h1>
+    <p>Enter any ticker — US, SG, HK, or India markets. Computes RSI, MACD, Bollinger %B, SMA crossover, momentum &amp; volume signals.</p>
+  </div>
+
+  <div class="search-row">
+    <input class="ticker-input" id="tickerInput" type="text" placeholder="e.g. AAPL, D05.SI, 0700.HK, RELIANCE.NS" maxlength="20" autocomplete="off" spellcheck="false"/>
+    <select class="market-select" id="marketSelect">
+      <option value="">Auto-detect</option>
+      <option value="US">🇺🇸 US (NYSE/NASDAQ)</option>
+      <option value="SG">🇸🇬 SG (SGX) — add .SI</option>
+      <option value="HK">🇭🇰 HK — add .HK</option>
+      <option value="IN_NSE">🇮🇳 India NSE — add .NS</option>
+      <option value="IN_BSE">🇮🇳 India BSE — add .BO</option>
+    </select>
+    <button class="btn-fetch" id="fetchBtn" onclick="fetchTicker()">Analyse →</button>
+  </div>
+
+  <div class="market-hints">
+    <span>US: AAPL TSLA SPY</span>
+    <span>SG: D05.SI ES3.SI BYJ.SI</span>
+    <span>HK: 0700.HK 9988.HK</span>
+    <span>India: RELIANCE.NS INFY.NS TCS.BO</span>
+  </div>
+
+  <div class="status-bar" id="statusBar"> </div>
+
+  <div id="results" class="hidden">
+    <div class="price-hero">
+      <span class="sym" id="rSym"></span>
+      <span class="price" id="rPrice"></span>
+      <span class="change" id="rChange"></span>
+      <span class="meta" id="rMeta"></span>
+    </div>
+
+    <div class="range-row" id="rangeRow">
+      <button class="range-btn active" onclick="setRange('1mo')">1M</button>
+      <button class="range-btn" onclick="setRange('3mo')">3M</button>
+      <button class="range-btn" onclick="setRange('6mo')">6M</button>
+      <button class="range-btn" onclick="setRange('1y')">1Y</button>
+    </div>
+
+    <div class="chart-section">
+      <p class="chart-label">Price</p>
+      <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+    </div>
+
+    <div class="score-row">
+      <span class="score-label">Composite signal</span>
+      <div class="score-bar-wrap"><div class="score-bar-fill" id="scoreBarFill"></div></div>
+      <span class="score-num" id="scoreNum"></span>
+      <span class="score-verdict" id="scoreVerdict"></span>
+    </div>
+
+    <div class="signal-bar" id="signalBar"></div>
+
+    <div class="ind-grid" id="indGrid"></div>
+
+    <div class="chart-section">
+      <p class="chart-label">RSI (14)</p>
+      <div class="chart-wrap"><canvas id="rsiChart"></canvas></div>
+    </div>
+
+    <div class="chart-section">
+      <p class="chart-label">MACD</p>
+      <div class="chart-wrap"><canvas id="macdChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="empty" id="emptyState">
+    <div class="big">⌗</div>
+    Enter a ticker above to load signals
+  </div>
+
+  <div class="foot">
+    <span>Data: Yahoo Finance · 15–20 min delay for equities</span>
+    <span id="footTime"></span>
+  </div>
+</div>
+
+<script>
+let priceChartInst=null, rsiChartInst=null, macdChartInst=null;
+let allData=null, currentRange='1mo';
+
+const CORSproxy = 'https://corsproxy.io/?url=';
+
+function suffixFor(market){
+  const m={SG:'.SI',HK:'.HK',IN_NSE:'.NS',IN_BSE:'.BO',US:''};
+  return m[market]??'';
+}
+
+function resolveTicker(raw, market){
+  const t=raw.trim().toUpperCase();
+  if(market==='') return t; // already has suffix or US
+  const suf=suffixFor(market);
+  if(suf && !t.endsWith(suf)) return t+suf;
+  return t;
+}
+
+function setStatus(msg, type=''){
+  const el=document.getElementById('statusBar');
+  el.textContent=msg; el.className='status-bar'+(type?' '+type:'');
+}
+
+async function fetchTicker(){
+  const raw=document.getElementById('tickerInput').value.trim();
+  if(!raw){setStatus('Enter a ticker symbol','error');return;}
+  const market=document.getElementById('marketSelect').value;
+  const ticker=resolveTicker(raw,market);
+  currentRange='1mo';
+  document.querySelectorAll('.range-btn').forEach((b,i)=>{b.classList.toggle('active',i===0)});
+  await loadData(ticker);
+}
+
+async function loadData(ticker){
+  const btn=document.getElementById('fetchBtn');
+  btn.disabled=true;
+  setStatus(`Fetching ${ticker}…`,'loading');
+  document.getElementById('results').classList.add('hidden');
+  document.getElementById('emptyState').classList.add('hidden');
+
+  try{
+    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1y&includePrePost=false`;
+    const proxied=CORSOXY+encodeURIComponent(url);
+    const res=await fetch(proxied);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json=await res.json();
+    const result=json?.chart?.result?.[0];
+    if(!result) throw new Error('No data returned — check the ticker symbol');
+
+    allData={ticker, result};
+    renderAll();
+    setStatus(`${ticker} · Updated ${new Date().toLocaleTimeString()}`,'ok');
+    document.getElementById('footTime').textContent=new Date().toLocaleString();
+  } catch(e){
+    setStatus(`Error: ${e.message}`,'error');
+    document.getElementById('emptyState').classList.remove('hidden');
+    document.getElementById('emptyState').innerHTML=`<div class="big">✕</div>${e.message}`;
+  } finally{
+    btn.disabled=false;
+  }
+}
+
+function setRange(r){
+  currentRange=r;
+  document.querySelectorAll('.range-btn').forEach(b=>{
+    b.classList.toggle('active',b.textContent.toLowerCase()===r.toLowerCase()||
+      (r==='1mo'&&b.textContent==='1M')||(r==='3mo'&&b.textContent==='3M')||
+      (r==='6mo'&&b.textContent==='6M')||(r==='1y'&&b.textContent==='1Y'));
+  });
+  renderAll();
+}
+
+function sliceByRange(timestamps, values, range){
+  const now=Date.now()/1000;
+  const days={1mo:30,3mo:90,6mo:180,1y:365}[range]||365;
+  const cutoff=now-days*86400;
+  const idx=timestamps.findIndex(t=>t>=cutoff);
+  if(idx<0) return{timestamps,values};
+  return{timestamps:timestamps.slice(idx),values:values.slice(idx)};
+}
+
+function renderAll(){
+  if(!allData) return;
+  const {ticker,result}=allData;
+  const meta=result.meta;
+  const quote=result.indicators.quote[0];
+  const rawTs=result.timestamp;
+  const rawClose=quote.close;
+  const rawVol=quote.volume;
+  const rawHigh=quote.high;
+  const rawLow=quote.low;
+
+  // Filter nulls
+  const valid=rawTs.map((t,i)=>({t,c:rawClose[i],v:rawVol[i],h:rawHigh[i],l:rawLow[i]}))
+    .filter(d=>d.c!=null&&d.v!=null);
+
+  const {timestamps,values:closes}=sliceByRange(valid.map(d=>d.t),valid.map(d=>d.c),currentRange);
+  const vols=sliceByRange(valid.map(d=>d.t),valid.map(d=>d.v),currentRange).values;
+
+  // Price hero
+  const cur=closes[closes.length-1];
+  const prev=closes[closes.length-2]??cur;
+  const chg=cur-prev, chgPct=(chg/prev)*100;
+  document.getElementById('rSym').textContent=ticker;
+  document.getElementById('rPrice').textContent=formatPrice(cur, meta.currency);
+  const changeEl=document.getElementById('rChange');
+  changeEl.textContent=`${chg>=0?'+':''}${chg.toFixed(2)} (${chgPct.toFixed(2)}%)`;
+  changeEl.className=`change ${chg>=0?'up':'down'}`;
+  document.getElementById('rMeta').textContent=`${meta.exchangeName||''} · ${meta.currency||''}`;
+
+  // Compute indicators on full 1y data for accuracy, display sliced range
+  const allClose=valid.map(d=>d.c);
+  const allVol=valid.map(d=>d.v);
+
+  const rsiAll=calcRSI(allClose,14);
+  const {macd:macdAll,signal:macdSigAll,hist:macdHistAll}=calcMACD(allClose);
+  const {upper:bbuAll,lower:bblAll,mid:bbmAll}=calcBB(allClose,20,2);
+  const sma20All=calcSMA(allClose,20);
+  const sma50All=calcSMA(allClose,50);
+
+  // Slice to range
+  const N=closes.length;
+  const totalN=allClose.length;
+  const offset=totalN-N;
+
+  const rsiSlice=rsiAll.slice(offset);
+  const macdSlice=macdAll.slice(offset);
+  const macdSigSlice=macdSigAll.slice(offset);
+  const macdHistSlice=macdHistAll.slice(offset);
+  const sma20Slice=sma20All.slice(offset);
+  const sma50Slice=sma50All.slice(offset);
+  const bbuSlice=bbuAll.slice(offset);
+  const bblSlice=bblAll.slice(offset);
+
+  // Current values (last)
+  const rsiCur=rsiAll[totalN-1];
+  const macdCur=macdAll[totalN-1];
+  const macdSigCur=macdSigAll[totalN-1];
+  const sma20Cur=sma20All[totalN-1];
+  const sma50Cur=sma50All[totalN-1];
+  const bbuCur=bbuAll[totalN-1];
+  const bblCur=bblAll[totalN-1];
+  const bbmCur=bbmAll[totalN-1];
+  const bbPct=bbuCur&&bblCur?(cur-bblCur)/(bbuCur-bblCur):null;
+  const volAvg20=mean(allVol.slice(-20));
+  const volCur=allVol[totalN-1];
+  const volRatio=volCur&&volAvg20?volCur/volAvg20:null;
+  const mom10=totalN>=10?((cur/allClose[totalN-11])-1)*100:null;
+
+  // Signals
+  const signals=computeSignals({rsiCur,macdCur,macdSigCur,sma20Cur,sma50Cur,cur,bbPct,volRatio,mom10});
+  renderSignals(signals);
+  renderIndicators({rsiCur,macdCur,macdSigCur,sma20Cur,sma50Cur,cur,bbPct,volRatio,mom10,bbuCur,bblCur,bbmCur,meta});
+
+  // Charts
+  const labels=timestamps.map(t=>new Date(t*1000).toLocaleDateString('en-GB',{month:'short',day:'numeric'}));
+  drawPriceChart(labels,closes,sma20Slice,sma50Slice,bbuSlice,bblSlice);
+  drawRsiChart(labels,rsiSlice);
+  drawMacdChart(labels,macdSlice,macdSigSlice,macdHistSlice);
+
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('emptyState').classList.add('hidden');
+}
+
+function computeSignals({rsiCur,macdCur,macdSigCur,sma20Cur,sma50Cur,cur,bbPct,volRatio,mom10}){
+  const s=[];
+  // RSI
+  if(rsiCur!=null){
+    if(rsiCur<35) s.push({name:'RSI',label:'Oversold',dir:'bull',detail:`RSI ${rsiCur.toFixed(1)}`});
+    else if(rsiCur>65) s.push({name:'RSI',label:'Overbought',dir:'bear',detail:`RSI ${rsiCur.toFixed(1)}`});
+    else s.push({name:'RSI',label:'Neutral',dir:'neut',detail:`RSI ${rsiCur.toFixed(1)}`});
+  }
+  // MACD
+  if(macdCur!=null&&macdSigCur!=null){
+    const above=macdCur>macdSigCur;
+    s.push({name:'MACD',label:above?'Bullish cross':'Bearish cross',dir:above?'bull':'bear',detail:`${macdCur.toFixed(3)} vs ${macdSigCur.toFixed(3)}`});
+  }
+  // Bollinger %B
+  if(bbPct!=null){
+    if(bbPct<0.2) s.push({name:'Bollinger',label:'Near lower band',dir:'bull',detail:`%B ${(bbPct*100).toFixed(0)}%`});
+    else if(bbPct>0.8) s.push({name:'Bollinger',label:'Near upper band',dir:'bear',detail:`%B ${(bbPct*100).toFixed(0)}%`});
+    else s.push({name:'Bollinger',label:'Mid-band',dir:'neut',detail:`%B ${(bbPct*100).toFixed(0)}%`});
+  }
+  // SMA crossover
+  if(sma20Cur!=null&&sma50Cur!=null){
+    const above=sma20Cur>sma50Cur;
+    s.push({name:'SMA 20/50',label:above?'Golden cross zone':'Death cross zone',dir:above?'bull':'bear',detail:`20: ${sma20Cur.toFixed(2)} · 50: ${sma50Cur.toFixed(2)}`});
+  }
+  // Momentum
+  if(mom10!=null){
+    if(mom10>3) s.push({name:'Momentum',label:'Positive',dir:'bull',detail:`+${mom10.toFixed(1)}% (10d)`});
+    else if(mom10<-3) s.push({name:'Momentum',label:'Negative',dir:'bear',detail:`${mom10.toFixed(1)}% (10d)`});
+    else s.push({name:'Momentum',label:'Flat',dir:'neut',detail:`${mom10.toFixed(1)}% (10d)`});
+  }
+  // Volume
+  if(volRatio!=null){
+    if(volRatio>1.5) s.push({name:'Volume',label:'High activity',dir:'bull',detail:`${volRatio.toFixed(1)}× avg`});
+    else if(volRatio<0.7) s.push({name:'Volume',label:'Low activity',dir:'neut',detail:`${volRatio.toFixed(1)}× avg`});
+    else s.push({name:'Volume',label:'Normal',dir:'neut',detail:`${volRatio.toFixed(1)}× avg`});
+  }
+  return s;
+}
+
+function renderSignals(signals){
+  const bar=document.getElementById('signalBar');
+  bar.innerHTML='';
+  signals.forEach(s=>{
+    const p=document.createElement('span');
+    p.className=`signal-pill ${s.dir}`;
+    p.innerHTML=`<span class="dot"></span>${s.name}: ${s.label}`;
+    p.title=s.detail;
+    bar.appendChild(p);
+  });
+
+  // Score
+  const bulls=signals.filter(s=>s.dir==='bull').length;
+  const bears=signals.filter(s=>s.dir==='bear').length;
+  const score=Math.round((bulls/(bulls+bears+signals.filter(s=>s.dir==='neut').length))*100);
+  const pct=bulls+bears===0?50:Math.round((bulls/(bulls+bears))*100);
+
+  document.getElementById('scoreNum').textContent=`${pct}%`;
+  const fill=document.getElementById('scoreBarFill');
+  fill.style.width=pct+'%';
+  fill.style.background=pct>=60?'#4ade80':pct<=40?'#f87171':'#fbbf24';
+
+  const verd=document.getElementById('scoreVerdict');
+  let label='Neutral'; let cls='neut';
+  if(pct>=70){label='Bullish';cls='bull';}
+  else if(pct>=60){label='Mildly bullish';cls='bull';}
+  else if(pct<=30){label='Bearish';cls='bear';}
+  else if(pct<=40){label='Mildly bearish';cls='bear';}
+  verd.textContent=label;
+  verd.className=`score-verdict ${cls==='bull'?'':''}`;
+  verd.style.background=cls==='bull'?'#1a3a25':cls==='bear'?'#3a1a1a':'#252525';
+  verd.style.color=cls==='bull'?'#4ade80':cls==='bear'?'#f87171':'#888';
+}
+
+function renderIndicators({rsiCur,macdCur,macdSigCur,sma20Cur,sma50Cur,cur,bbPct,volRatio,mom10,bbuCur,bblCur,bbmCur,meta}){
+  const grid=document.getElementById('indGrid');
+  grid.innerHTML='';
+  const cards=[
+    {name:'RSI 14',
+     value:rsiCur!=null?rsiCur.toFixed(1):'—',
+     sub:rsiCur!=null?(rsiCur<35?'Oversold region':rsiCur>65?'Overbought region':'Neutral zone'):'—',
+     dir:rsiCur!=null?(rsiCur<35?'bull':rsiCur>65?'bear':'neut'):'neut'},
+    {name:'MACD',
+     value:macdCur!=null?macdCur.toFixed(3):'—',
+     sub:macdSigCur!=null?`Signal: ${macdSigCur.toFixed(3)}`:'—',
+     dir:macdCur!=null&&macdSigCur!=null?(macdCur>macdSigCur?'bull':'bear'):'neut'},
+    {name:'Bollinger %B',
+     value:bbPct!=null?`${(bbPct*100).toFixed(0)}%`:'—',
+     sub:bbuCur!=null?`Upper ${bbuCur.toFixed(2)} · Lower ${bblCur.toFixed(2)}`:'—',
+     dir:bbPct!=null?(bbPct<0.2?'bull':bbPct>0.8?'bear':'neut'):'neut'},
+    {name:'SMA 20',
+     value:sma20Cur!=null?formatPrice(sma20Cur,meta.currency):'—',
+     sub:sma20Cur!=null?(cur>sma20Cur?'Price above SMA':'Price below SMA'):'—',
+     dir:sma20Cur!=null?(cur>sma20Cur?'bull':'bear'):'neut'},
+    {name:'SMA 50',
+     value:sma50Cur!=null?formatPrice(sma50Cur,meta.currency):'—',
+     sub:sma50Cur!=null?(cur>sma50Cur?'Price above SMA':'Price below SMA'):'—',
+     dir:sma50Cur!=null?(cur>sma50Cur?'bull':'bear'):'neut'},
+    {name:'Momentum 10d',
+     value:mom10!=null?`${mom10>=0?'+':''}${mom10.toFixed(2)}%`:'—',
+     sub:'10-day price change',
+     dir:mom10!=null?(mom10>3?'bull':mom10<-3?'bear':'neut'):'neut'},
+    {name:'Volume ratio',
+     value:volRatio!=null?`${volRatio.toFixed(2)}×`:'—',
+     sub:'vs 20-day average',
+     dir:volRatio!=null?(volRatio>1.5?'bull':volRatio<0.7?'neut':'neut'):'neut'},
+  ];
+  cards.forEach(c=>{
+    const d=document.createElement('div');
+    d.className='ind-card';
+    d.innerHTML=`<div class="ind-card-top"><span class="ind-name">${c.name}</span><span class="ind-badge ${c.dir}">${c.dir==='bull'?'↑ Bull':c.dir==='bear'?'↓ Bear':'→ Neutral'}</span></div><div class="ind-value">${c.value}</div><div class="ind-sub">${c.sub}</div>`;
+    grid.appendChild(d);
+  });
+}
+
+function drawPriceChart(labels,prices,sma20,sma50,bbu,bbl){
+  if(priceChartInst){priceChartInst.destroy();priceChartInst=null;}
+  const ctx=document.getElementById('priceChart').getContext('2d');
+  priceChartInst=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Price',data:prices,borderColor:'#e8e8e4',borderWidth:1.5,pointRadius:0,tension:.3,fill:false},
+        {label:'SMA20',data:sma20,borderColor:'#60a5fa',borderWidth:1,pointRadius:0,tension:.3,fill:false,borderDash:[4,4]},
+        {label:'SMA50',data:sma50,borderColor:'#fbbf24',borderWidth:1,pointRadius:0,tension:.3,fill:false,borderDash:[6,3]},
+        {label:'BB Upper',data:bbu,borderColor:'#555',borderWidth:1,pointRadius:0,tension:.3,fill:false},
+        {label:'BB Lower',data:bbl,borderColor:'#555',borderWidth:1,pointRadius:0,tension:.3,fill:false},
+      ]
+    },
+    options:chartOpts()
+  });
+}
+
+function drawRsiChart(labels,rsi){
+  if(rsiChartInst){rsiChartInst.destroy();rsiChartInst=null;}
+  const ctx=document.getElementById('rsiChart').getContext('2d');
+  const colors=rsi.map(v=>v==null?'#555':v<35?'#4ade80':v>65?'#f87171':'#888');
+  rsiChartInst=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[
+      {label:'RSI',data:rsi,borderColor:'#888',borderWidth:1.5,pointRadius:0,tension:.3,
+       segment:{borderColor:ctx2=>rsi[ctx2.p1DataIndex]<35?'#4ade80':rsi[ctx2.p1DataIndex]>65?'#f87171':'#888'}},
+    ]},
+    options:{...chartOpts(),scales:{...chartOpts().scales,y:{...chartOpts().scales.y,min:0,max:100,
+      ticks:{color:'#555',font:{family:"'IBM Plex Mono'",size:10},
+        callback:v=>[0,30,50,70,100].includes(v)?v:null},
+      grid:{color:v=>[30,50,70].includes(v.tick.value)?'#333':'transparent'}}}}
+  });
+}
+
+function drawMacdChart(labels,macd,signal,hist){
+  if(macdChartInst){macdChartInst.destroy();macdChartInst=null;}
+  const ctx=document.getElementById('macdChart').getContext('2d');
+  macdChartInst=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Histogram',data:hist,backgroundColor:hist.map(v=>v==null?'#333':v>=0?'rgba(74,222,128,.5)':'rgba(248,113,113,.5)'),type:'bar',order:2},
+      {label:'MACD',data:macd,borderColor:'#60a5fa',borderWidth:1.5,pointRadius:0,tension:.3,type:'line',fill:false,order:1},
+      {label:'Signal',data:signal,borderColor:'#fbbf24',borderWidth:1,pointRadius:0,tension:.3,type:'line',fill:false,order:1,borderDash:[4,4]},
+    ]},
+    options:chartOpts()
+  });
+}
+
+function chartOpts(){
+  return{
+    responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:true,labels:{color:'#555',font:{family:"'IBM Plex Mono'",size:10},boxWidth:20,padding:12}},tooltip:{backgroundColor:'#1e1e1e',borderColor:'#333',borderWidth:1,titleColor:'#888',bodyColor:'#e8e8e4',titleFont:{family:"'IBM Plex Mono'",size:11},bodyFont:{family:"'IBM Plex Mono'",size:11}}},
+    scales:{
+      x:{ticks:{color:'#555',font:{family:"'IBM Plex Mono'",size:10},maxTicksLimit:8},grid:{color:'transparent'},border:{color:'#2a2a2a'}},
+      y:{ticks:{color:'#555',font:{family:"'IBM Plex Mono'",size:10}},grid:{color:'#1e1e1e'},border:{color:'#2a2a2a'}}
+    }
+  };
+}
+
+// ── Indicator math ──────────────────────────────────────────────
+function calcSMA(data,n){
+  return data.map((_,i)=>i<n-1?null:mean(data.slice(i-n+1,i+1)));
+}
+function calcRSI(data,n=14){
+  const res=Array(data.length).fill(null);
+  for(let i=n;i<data.length;i++){
+    let gains=0,losses=0;
+    for(let j=i-n+1;j<=i;j++){
+      const d=data[j]-data[j-1];
+      if(d>0) gains+=d; else losses-=d;
+    }
+    const rs=losses===0?100:gains/losses;
+    res[i]=100-(100/(1+rs));
+  }
+  return res;
+}
+function calcMACD(data,fast=12,slow=26,sig=9){
+  const emaFast=calcEMA(data,fast);
+  const emaSlow=calcEMA(data,slow);
+  const macd=data.map((_,i)=>emaFast[i]!=null&&emaSlow[i]!=null?emaFast[i]-emaSlow[i]:null);
+  const macdClean=macd.map(v=>v??0);
+  const signal=calcEMA(macdClean,sig);
+  const hist=macd.map((v,i)=>v!=null&&signal[i]!=null?v-signal[i]:null);
+  return{macd,signal,hist};
+}
+function calcEMA(data,n){
+  const k=2/(n+1);
+  const res=Array(data.length).fill(null);
+  let started=false;let ema=0;
+  for(let i=0;i<data.length;i++){
+    if(data[i]==null) continue;
+    if(!started){ema=data[i];started=true;res[i]=ema;continue;}
+    ema=data[i]*k+ema*(1-k);res[i]=ema;
+  }
+  return res;
+}
+function calcBB(data,n=20,mult=2){
+  const upper=[],lower=[],mid=[];
+  for(let i=0;i<data.length;i++){
+    if(i<n-1){upper.push(null);lower.push(null);mid.push(null);continue;}
+    const sl=data.slice(i-n+1,i+1);
+    const m=mean(sl);
+    const sd=Math.sqrt(sl.reduce((s,v)=>s+(v-m)**2,0)/n);
+    upper.push(m+mult*sd);lower.push(m-mult*sd);mid.push(m);
+  }
+  return{upper,lower,mid};
+}
+function mean(arr){
+  const v=arr.filter(x=>x!=null);
+  return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;
+}
+function formatPrice(v,currency){
+  if(v==null) return '—';
+  const sym={USD:'$',SGD:'S$',HKD:'HK$',INR:'₹',EUR:'€',GBP:'£'}[currency]||'';
+  return sym+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+// Enter key
+document.getElementById('tickerInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter') fetchTicker();
+});
+
+// Market select auto-appends suffix hint
+document.getElementById('marketSelect').addEventListener('change',()=>{
+  const m=document.getElementById('marketSelect').value;
+  const suf=suffixFor(m);
+  const inp=document.getElementById('tickerInput');
+  if(suf&&inp.value&&!inp.value.toUpperCase().endsWith(suf.toUpperCase())){
+    // just hint via placeholder
+  }
+});
+</script>
+</body>
+</html>
